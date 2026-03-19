@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Format in env: CODE1:url1,CODE2:url2
-// Example: NEHORAY_CODES=mortgage:https://mortgage.nehoraylevi.com,photos:https://photos.nehoraylevi.com
+// Example: NEHORAY_CODES=mortgage:https://nehoraylevi.com/mortgageapp,photos:https://photos.nehoraylevi.com
 function getCodes(): Record<string, string> {
   const raw = process.env.NEHORAY_CODES ?? "";
   return Object.fromEntries(
