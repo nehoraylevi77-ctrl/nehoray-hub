@@ -1,27 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Format in env: CODE1:url1,CODE2:url2
-// Example: NEHORAY_CODES=mortgage:https://nehoraylevi.com/mortgageapp,photos:https://photos.nehoraylevi.com
-function getCodes(): Record<string, string> {
+// Supported formats in NEHORAY_CODES env (comma-separated):
+//   New format (recommended): id|icon|passcode|url
+//   Old format (compat):      id:url   (passcode defaults to id)
+//
+// Example:
+//   NEHORAY_CODES=mortgage|🏠|secret123|https://myapp.com,photos|📷|photopass|https://photos.com
+function getEntries(): Record<string, { url: string; passcode: string }> {
   const raw = process.env.NEHORAY_CODES ?? "";
-  return Object.fromEntries(
-    raw.split(",")
-      .filter(Boolean)
-      .map((entry) => {
+  const result: Record<string, { url: string; passcode: string }> = {};
+
+  raw
+    .split(",")
+    .filter(Boolean)
+    .forEach((entry) => {
+      if (entry.includes("|")) {
+        const parts = entry.split("|");
+        const id = parts[0].trim().toLowerCase();
+        const passcode = parts[2]?.trim() ?? id;
+        const url = parts[3]?.trim() ?? "";
+        if (id && url) result[id] = { url, passcode };
+      } else {
         const idx = entry.indexOf(":");
-        return [entry.slice(0, idx).trim().toLowerCase(), entry.slice(idx + 1).trim()];
-      })
-  );
+        const id = entry.slice(0, idx).trim().toLowerCase();
+        const url = entry.slice(idx + 1).trim();
+        if (id && url) result[id] = { url, passcode: id };
+      }
+    });
+
+  return result;
 }
 
 export async function POST(req: NextRequest) {
-  const { code } = await req.json();
-  const codes = getCodes();
-  const url = codes[String(code).toLowerCase().trim()];
+  const body = await req.json();
+  const entries = getEntries();
 
-  if (!url) {
-    return NextResponse.json({ error: "invalid" }, { status: 401 });
+  // New per-app format: { app, passcode }
+  if (body.app !== undefined) {
+    const app = String(body.app).toLowerCase().trim();
+    const passcode = String(body.passcode ?? "").trim();
+    const entry = entries[app];
+    if (!entry || entry.passcode.toLowerCase() !== passcode.toLowerCase()) {
+      return NextResponse.json({ error: "invalid" }, { status: 401 });
+    }
+    return NextResponse.json({ url: entry.url });
   }
 
-  return NextResponse.json({ url });
+  // Legacy format: { code }
+  const code = String(body.code ?? "").toLowerCase().trim();
+  const entry = entries[code];
+  if (!entry) {
+    return NextResponse.json({ error: "invalid" }, { status: 401 });
+  }
+  return NextResponse.json({ url: entry.url });
 }
